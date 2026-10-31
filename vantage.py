@@ -14,6 +14,7 @@ from PySide6.QtWidgets import (
     QButtonGroup,
     QCheckBox,
     QFrame,
+    QGridLayout,
     QHBoxLayout,
     QLabel,
     QMainWindow,
@@ -64,6 +65,8 @@ TRANSLATIONS = {
         "no_controls": "No supported hardware controls found",
         "no_controls_description": "This device doesn't expose any Lenovo Vantage settings.",
         "setting_error": "The setting could not be changed.",
+        "enabled": "Enabled",
+        "disabled": "Disabled",
     },
     "ru": {
         "subtitle": "Настройка оборудования ноутбука",
@@ -93,6 +96,8 @@ TRANSLATIONS = {
         "no_controls": "Поддерживаемые настройки оборудования не найдены",
         "no_controls_description": "Это устройство не предоставляет настройки Lenovo Vantage.",
         "setting_error": "Не удалось изменить настройку.",
+        "enabled": "Включено",
+        "disabled": "Выключено",
     },
 }
 
@@ -262,56 +267,17 @@ def set_wifi_active(active):
     return rc == 0, err
 
 
-class SettingRow(QWidget):
-    """A compact settings row using standard KDE/Qt controls."""
-
-    def __init__(self, title, description, control, stacked_control=False, parent=None):
-        super().__init__(parent)
-        self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Minimum)
-        description_label = QLabel(description)
-        description_label.setWordWrap(True)
-        description_label.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Minimum)
-
-        if isinstance(control, QCheckBox):
-            control.setText(title)
-            layout = QVBoxLayout(self)
-            layout.setContentsMargins(0, 8, 0, 8)
-            layout.setSpacing(2)
-            layout.addWidget(control)
-            description_label.setContentsMargins(24, 0, 0, 0)
-            layout.addWidget(description_label)
-            return
-
-        text_box = QVBoxLayout()
-        text_box.setContentsMargins(0, 0, 0, 0)
-        text_box.setSpacing(4)
-        title_label = QLabel(title)
-        title_label.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
-        text_box.addWidget(title_label)
-        text_box.addWidget(description_label)
-        if stacked_control:
-            layout = QVBoxLayout(self)
-            layout.setContentsMargins(0, 10, 0, 10)
-            layout.setSpacing(8)
-            layout.addLayout(text_box)
-            layout.addWidget(control)
-        else:
-            layout = QHBoxLayout(self)
-            layout.setContentsMargins(0, 12, 0, 12)
-            layout.setSpacing(24)
-            layout.addLayout(text_box, 1)
-            layout.addWidget(control, 0, Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
-
-
 class VantageWindow(QMainWindow):
     CATEGORIES = ("power", "performance", "devices")
 
     def __init__(self):
         super().__init__()
         self.setWindowTitle("Lenovo Vantage")
-        self.setMinimumSize(640, 520)
-        self.resize(1040, 700)
+        self.setMinimumSize(980, 560)
+        self.resize(2400, 760)
         self.rows = []
+        self.form_row = 0
+        self.section_headings = []
 
         central = QWidget()
         root = QHBoxLayout(central)
@@ -320,7 +286,7 @@ class VantageWindow(QMainWindow):
         root.addStretch(1)
 
         page = QWidget()
-        page.setMaximumWidth(900)
+        page.setMaximumWidth(2300)
         content = QVBoxLayout(page)
         content.setContentsMargins(28, 22, 28, 20)
         content.setSpacing(16)
@@ -350,19 +316,24 @@ class VantageWindow(QMainWindow):
         self.scroll.setWidget(body)
         content.addWidget(self.scroll, 1)
 
-        self.sections = {}
+        self.form_layout = QGridLayout()
+        self.form_layout.setContentsMargins(0, 0, 0, 0)
+        self.form_layout.setHorizontalSpacing(36)
+        self.form_layout.setVerticalSpacing(8)
+        self.form_layout.setColumnMinimumWidth(0, 360)
+        self.form_layout.setColumnStretch(0, 0)
+        self.form_layout.setColumnStretch(1, 1)
+        self.body_layout.addLayout(self.form_layout)
+
         for category in self.CATEGORIES:
-            section = QWidget()
-            section_layout = QVBoxLayout(section)
-            section_layout.setContentsMargins(0, 0, 0, 0)
-            section_layout.setSpacing(4)
             section_heading = QLabel(tr(category))
             section_font = section_heading.font()
             section_font.setWeight(QFont.Weight.DemiBold)
             section_heading.setFont(section_font)
-            section_layout.addWidget(section_heading)
-            self.body_layout.addWidget(section)
-            self.sections[category] = (section, section_layout)
+            self.form_layout.addWidget(section_heading, self.form_row, 0, 1, 2)
+            self.form_layout.setRowMinimumHeight(self.form_row, 30)
+            self.section_headings.append((category, section_heading))
+            self.form_row += 1
 
         self.populate()
         self.body_layout.addStretch(1)
@@ -373,32 +344,62 @@ class VantageWindow(QMainWindow):
         self.addAction(escape)
 
     def add_row(self, category, title, description, control):
-        row = SettingRow(title, description, control)
-        _, layout = self.sections[category]
-        layout.addWidget(row)
-        self.rows.append((category, row))
-        return row
+        label = QLabel(f"{title}:")
+        label.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+        description_label = QLabel(description)
+        description_label.setWordWrap(True)
+        description_label.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Minimum)
+        field = QWidget()
+        field_layout = QVBoxLayout(field)
+        field_layout.setContentsMargins(0, 4, 0, 4)
+        field_layout.setSpacing(4)
+        field_layout.addWidget(control, 0, Qt.AlignmentFlag.AlignLeft)
+        field_layout.addWidget(description_label)
+        self.form_layout.addWidget(label, self.form_row, 0)
+        self.form_layout.addWidget(field, self.form_row, 1)
+        self.form_row += 1
+        self.rows.append(category)
+        return label
 
     def add_checkbox(self, category, title_key, description_key, get_fn, set_fn):
         title = tr(title_key)
-        switch = QCheckBox(title)
-        switch.setChecked(bool(get_fn()))
-        switch.setAccessibleName(title)
-        row = self.add_row(category, title, tr(description_key), switch)
+        choices = QWidget()
+        choices_layout = QVBoxLayout(choices)
+        choices_layout.setContentsMargins(0, 0, 0, 0)
+        choices_layout.setSpacing(2)
+        group = QButtonGroup(choices)
+        group.setExclusive(True)
+        enabled = QCheckBox(tr("enabled"))
+        disabled = QCheckBox(tr("disabled"))
+        current = bool(get_fn())
+        enabled.setChecked(current)
+        disabled.setChecked(not current)
+        group.addButton(enabled)
+        group.addButton(disabled)
+        choices_layout.addWidget(enabled)
+        choices_layout.addWidget(disabled)
+        row = self.add_row(category, title, tr(description_key), choices)
 
-        def changed(active):
-            ok, err = set_fn(active)
+        def changed(active, desired):
+            if not active:
+                return
+            ok, err = set_fn(desired)
             if not ok:
-                switch.blockSignals(True)
-                switch.setChecked(not active)
-                switch.blockSignals(False)
+                current_state = bool(get_fn())
+                enabled.blockSignals(True)
+                disabled.blockSignals(True)
+                enabled.setChecked(current_state)
+                disabled.setChecked(not current_state)
+                enabled.blockSignals(False)
+                disabled.blockSignals(False)
                 self.show_error(title, err)
 
-        switch.toggled.connect(changed)
+        enabled.toggled.connect(lambda active: changed(active, True))
+        disabled.toggled.connect(lambda active: changed(active, False))
         return row
 
     def add_fan_mode(self):
-        title, description = tr("fan_mode"), tr("fan_description")
+        title = tr("fan_mode")
         options = QWidget()
         options_layout = QVBoxLayout(options)
         options_layout.setContentsMargins(0, 0, 0, 0)
@@ -412,10 +413,7 @@ class VantageWindow(QMainWindow):
             group.addButton(button)
             options_layout.addWidget(button)
             buttons[key] = button
-        row = SettingRow(title, description, options, stacked_control=True)
-        _, section_layout = self.sections["performance"]
-        section_layout.addWidget(row)
-        self.rows.append(("performance", row))
+        self.add_row("performance", title, tr("fan_description"), options)
 
         def changed(key):
             def on_toggled(active):
@@ -459,10 +457,9 @@ class VantageWindow(QMainWindow):
         if which("nmcli"):
             self.add_checkbox("devices", "wifi", "wifi_description", get_wifi_active, set_wifi_active)
 
-        for category in self.CATEGORIES:
-            section, layout = self.sections[category]
-            if layout.count() == 1:
-                section.setVisible(False)
+        if not self.rows:
+            for _, heading in self.section_headings:
+                heading.hide()
 
         if not self.rows:
             empty = QWidget()
