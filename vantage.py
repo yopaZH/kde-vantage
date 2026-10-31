@@ -8,7 +8,7 @@ import subprocess
 import sys
 
 from PySide6.QtCore import Qt
-from PySide6.QtGui import QAction
+from PySide6.QtGui import QAction, QFont, QIcon
 from PySide6.QtWidgets import (
     QApplication,
     QCheckBox,
@@ -17,8 +17,11 @@ from PySide6.QtWidgets import (
     QHBoxLayout,
     QLabel,
     QLineEdit,
+    QListWidget,
+    QListWidgetItem,
     QMainWindow,
     QMessageBox,
+    QStackedWidget,
     QScrollArea,
     QSizePolicy,
     QVBoxLayout,
@@ -188,71 +191,84 @@ def set_wifi_active(active):
     return rc == 0, err
 
 
-class SettingRow(QFrame):
-    """A compact settings row using the active Qt/KDE palette and style."""
+class SettingRow(QWidget):
+    """A flat settings-page row styled entirely by the active Qt theme."""
 
-    def __init__(self, title, description, parent=None):
+    def __init__(self, title, description, control, parent=None):
         super().__init__(parent)
-        self.setObjectName("settingRow")
-        self.setFrameShape(QFrame.Shape.StyledPanel)
+        self.search_text = f"{title} {description}".casefold()
         self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Minimum)
         layout = QHBoxLayout(self)
-        layout.setContentsMargins(16, 12, 16, 12)
+        layout.setContentsMargins(0, 12, 0, 12)
+        layout.setSpacing(24)
+
         text_box = QVBoxLayout()
-        text_box.setSpacing(3)
+        text_box.setContentsMargins(0, 0, 0, 0)
+        text_box.setSpacing(4)
         title_label = QLabel(title)
-        title_label.setObjectName("settingTitle")
         title_label.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
         description_label = QLabel(description)
-        description_label.setObjectName("settingDescription")
         description_label.setWordWrap(True)
+        description_label.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Minimum)
         text_box.addWidget(title_label)
         text_box.addWidget(description_label)
         layout.addLayout(text_box, 1)
+        layout.addWidget(control, 0, Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
 
 
 class VantageWindow(QMainWindow):
+    CATEGORIES = [
+        ("Power", "Battery and charging settings", "preferences-system-power-management"),
+        ("Performance", "Thermal and keyboard settings", "preferences-system-performance"),
+        ("Devices", "Connected hardware and radios", "preferences-desktop-peripherals"),
+    ]
+
     def __init__(self):
         super().__init__()
         self.setWindowTitle("Lenovo Vantage")
-        self.setMinimumSize(520, 560)
-        self.resize(620, 700)
+        self.setMinimumSize(760, 560)
+        self.resize(980, 680)
         self.rows = []
+        self.pages = {}
+        self.page_layouts = {}
+        self.category_items = {}
 
         central = QWidget()
-        outer = QVBoxLayout(central)
-        outer.setContentsMargins(24, 20, 24, 20)
-        outer.setSpacing(16)
+        root = QHBoxLayout(central)
+        root.setContentsMargins(0, 0, 0, 0)
+        root.setSpacing(0)
 
-        heading = QHBoxLayout()
-        title_box = QVBoxLayout()
-        title_box.setSpacing(2)
-        title = QLabel("Lenovo Vantage")
-        title.setObjectName("pageTitle")
-        subtitle = QLabel("Hardware settings")
-        subtitle.setObjectName("pageSubtitle")
-        title_box.addWidget(title)
-        title_box.addWidget(subtitle)
-        heading.addLayout(title_box, 1)
+        sidebar = QWidget()
+        sidebar.setObjectName("navigationSidebar")
+        sidebar.setMinimumWidth(210)
+        sidebar.setMaximumWidth(260)
+        sidebar_layout = QVBoxLayout(sidebar)
+        sidebar_layout.setContentsMargins(12, 16, 12, 16)
+        sidebar_layout.setSpacing(12)
+        app_name = QLabel("Lenovo Vantage")
+        app_name.setContentsMargins(8, 4, 8, 8)
+        sidebar_layout.addWidget(app_name)
         self.search = QLineEdit()
         self.search.setPlaceholderText("Search settings…")
         self.search.setClearButtonEnabled(True)
-        self.search.setMaximumWidth(240)
         self.search.textChanged.connect(self.filter_rows)
-        heading.addWidget(self.search, 0, Qt.AlignmentFlag.AlignVCenter)
-        outer.addLayout(heading)
+        sidebar_layout.addWidget(self.search)
+        self.navigation = QListWidget()
+        self.navigation.setFrameShape(QFrame.Shape.NoFrame)
+        self.navigation.currentItemChanged.connect(self.open_category)
+        sidebar_layout.addWidget(self.navigation, 1)
+        root.addWidget(sidebar)
 
-        self.scroll = QScrollArea()
-        self.scroll.setWidgetResizable(True)
-        self.scroll.setFrameShape(QFrame.Shape.NoFrame)
-        self.content = QWidget()
-        self.content_layout = QVBoxLayout(self.content)
-        self.content_layout.setContentsMargins(0, 0, 0, 0)
-        self.content_layout.setSpacing(18)
-        self.scroll.setWidget(self.content)
-        outer.addWidget(self.scroll, 1)
+        divider = QFrame()
+        divider.setFrameShape(QFrame.Shape.VLine)
+        divider.setFrameShadow(QFrame.Shadow.Sunken)
+        root.addWidget(divider)
+
+        self.stack = QStackedWidget()
+        root.addWidget(self.stack, 1)
         self.setCentralWidget(central)
 
+        self.create_pages()
         self.populate()
         self.search.setFocus()
 
@@ -261,28 +277,71 @@ class VantageWindow(QMainWindow):
         escape.triggered.connect(self.close)
         self.addAction(escape)
 
-    def add_section(self, title):
-        section = QWidget()
-        layout = QVBoxLayout(section)
-        layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(8)
-        label = QLabel(title)
-        label.setObjectName("sectionTitle")
-        layout.addWidget(label)
-        self.content_layout.addWidget(section)
-        return layout
+    def create_pages(self):
+        for name, description, icon_name in self.CATEGORIES:
+            page = QWidget()
+            page_layout = QVBoxLayout(page)
+            page_layout.setContentsMargins(32, 26, 32, 24)
+            page_layout.setSpacing(18)
 
-    def register_row(self, row, searchable):
-        row.search_text = searchable.lower()
-        self.rows.append(row)
+            heading = QVBoxLayout()
+            heading.setSpacing(4)
+            title = QLabel(name)
+            title_font = title.font()
+            title_font.setPointSizeF(title_font.pointSizeF() * 1.4)
+            title_font.setWeight(QFont.Weight.DemiBold)
+            title.setFont(title_font)
+            subtitle = QLabel(description)
+            heading.addWidget(title)
+            heading.addWidget(subtitle)
+            page_layout.addLayout(heading)
 
-    def add_switch(self, section, title, description, get_fn, set_fn):
-        row = SettingRow(title, description)
+            scroll = QScrollArea()
+            scroll.setWidgetResizable(True)
+            scroll.setFrameShape(QFrame.Shape.NoFrame)
+            body = QWidget()
+            body_layout = QVBoxLayout(body)
+            body_layout.setContentsMargins(0, 0, 0, 0)
+            body_layout.setSpacing(0)
+            scroll.setWidget(body)
+            page_layout.addWidget(scroll, 1)
+
+            no_results = QLabel("No matching settings")
+            no_results.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            no_results.hide()
+            page_layout.addWidget(no_results)
+
+            self.pages[name] = page
+            self.page_layouts[name] = (body_layout, no_results)
+            self.stack.addWidget(page)
+            item = QListWidgetItem(name)
+            item.setIcon(QIcon.fromTheme(icon_name))
+            item.setData(Qt.ItemDataRole.UserRole, name)
+            self.navigation.addItem(item)
+            self.category_items[name] = item
+
+    def add_row(self, category, title, description, searchable, control):
+        row = SettingRow(title, description, control)
+        row.search_text = f"{searchable} {title} {description}".casefold()
+        layout, _ = self.page_layouts[category]
+        if layout.count():
+            separator = QFrame()
+            separator.setFrameShape(QFrame.Shape.HLine)
+            separator.setFrameShadow(QFrame.Shadow.Sunken)
+            layout.addWidget(separator)
+            row.separator = separator
+        else:
+            row.separator = None
+        layout.addWidget(row)
+        self.rows.append((category, row))
+        return row
+
+    def add_switch(self, category, title, description, get_fn, set_fn):
         switch = QCheckBox()
         switch.setChecked(bool(get_fn()))
         switch.setAccessibleName(title)
         switch.setCursor(Qt.CursorShape.PointingHandCursor)
-        row.layout().addWidget(switch, 0, Qt.AlignmentFlag.AlignVCenter)
+        row = self.add_row(category, title, description, "", switch)
 
         def changed(active):
             ok, err = set_fn(active)
@@ -293,23 +352,19 @@ class VantageWindow(QMainWindow):
                 QMessageBox.warning(self, title, err or "The setting could not be changed.")
 
         switch.toggled.connect(changed)
-        section.addWidget(row)
-        self.register_row(row, f"{title} {description}")
         return row
 
-    def add_fan_mode(self, section):
+    def add_fan_mode(self):
         title, description = "Fan mode", "Choose the thermal and fan profile for this laptop"
-        row = SettingRow(title, description)
         combo = QComboBox()
         for label, key in FAN_MODES:
             combo.addItem(label, key)
         combo.setCurrentIndex(max(0, combo.findData(get_fan_mode())))
         combo.setMinimumContentsLength(18)
-        row.layout().addWidget(combo, 0, Qt.AlignmentFlag.AlignVCenter)
+        self.add_row("Performance", title, description, " ".join(x[0] for x in FAN_MODES), combo)
 
         def changed(index):
-            key = combo.itemData(index)
-            ok, err = set_fan_mode(key)
+            ok, err = set_fan_mode(combo.itemData(index))
             if not ok:
                 QMessageBox.warning(self, "Fan mode", err or "The fan mode could not be changed.")
                 combo.blockSignals(True)
@@ -317,53 +372,69 @@ class VantageWindow(QMainWindow):
                 combo.blockSignals(False)
 
         combo.currentIndexChanged.connect(changed)
-        section.addWidget(row)
-        self.register_row(row, f"{title} {description} {' '.join(x[0] for x in FAN_MODES)}")
 
     def populate(self):
-        power = self.add_section("Power")
         if vpc_path("conservation_mode"):
-            self.add_switch(power, "Conservation mode", "Limit battery charge to help preserve battery lifespan", get_conservation_mode, set_conservation_mode)
+            self.add_switch("Power", "Conservation mode", "Limit battery charge to help preserve battery lifespan", get_conservation_mode, set_conservation_mode)
         if vpc_path("usb_charging"):
-            self.add_switch(power, "Always-on USB", "Charge connected devices while the laptop is off", get_usb_charging, set_usb_charging)
+            self.add_switch("Power", "Always-on USB", "Charge connected devices while the laptop is off", get_usb_charging, set_usb_charging)
 
-        performance = self.add_section("Performance")
         if vpc_path("fan_mode"):
-            self.add_fan_mode(performance)
+            self.add_fan_mode()
         if vpc_path("fn_lock"):
-            self.add_switch(performance, "Fn Lock", "Use F1–F12 as standard function keys", get_fn_lock, set_fn_lock)
+            self.add_switch("Performance", "Fn Lock", "Use F1–F12 as standard function keys", get_fn_lock, set_fn_lock)
 
-        devices = self.add_section("Devices")
         touchpad = get_touchpad()
         if touchpad:
-            self.add_switch(devices, "Touchpad", "Enable or disable the built-in touchpad", lambda: get_touchpad_active(touchpad), lambda active: set_touchpad_active(touchpad, active))
+            self.add_switch("Devices", "Touchpad", "Enable or disable the built-in touchpad", lambda: get_touchpad_active(touchpad), lambda active: set_touchpad_active(touchpad, active))
         if sh("modinfo", "-n", "uvcvideo")[0] == 0:
-            self.add_switch(devices, "Camera", "Enable or disable the webcam driver", get_camera, set_camera)
+            self.add_switch("Devices", "Camera", "Enable or disable the webcam driver", get_camera, set_camera)
         if which("pactl"):
-            self.add_switch(devices, "Microphone", "Mute or unmute the default microphone", get_mic_active, set_mic_active)
+            self.add_switch("Devices", "Microphone", "Mute or unmute the default microphone", get_mic_active, set_mic_active)
         if which("nmcli"):
-            self.add_switch(devices, "Wi-Fi", "Turn the wireless radio on or off", get_wifi_active, set_wifi_active)
+            self.add_switch("Devices", "Wi-Fi", "Turn the wireless radio on or off", get_wifi_active, set_wifi_active)
 
-        for section_index in range(self.content_layout.count()):
-            section = self.content_layout.itemAt(section_index).widget()
-            section.setVisible(section.layout().count() > 1)
-        if not self.rows:
+        for name, _, _ in self.CATEGORIES:
+            if not self.page_layouts[name][0].count():
+                self.category_items[name].setHidden(True)
+
+        if self.rows:
+            first = next(name for name, _, _ in self.CATEGORIES if not self.category_items[name].isHidden())
+            self.navigation.setCurrentItem(self.category_items[first])
+        else:
             empty = QLabel("This device doesn't expose any supported Lenovo hardware controls.")
             empty.setWordWrap(True)
             empty.setAlignment(Qt.AlignmentFlag.AlignCenter)
-            self.content_layout.addWidget(empty)
-        self.content_layout.addStretch(1)
+            self.stack.addWidget(empty)
+            self.stack.setCurrentWidget(empty)
+
+    def open_category(self, current, _previous):
+        if not current:
+            return
+        category = current.data(Qt.ItemDataRole.UserRole)
+        self.stack.setCurrentWidget(self.pages[category])
+        self.filter_rows(self.search.text())
 
     def filter_rows(self, text):
         query = text.strip().casefold()
-        for row in self.rows:
-            row.setVisible(query in row.search_text)
-        for section_index in range(self.content_layout.count()):
-            item = self.content_layout.itemAt(section_index)
-            section = item.widget()
-            if section and section.layout():
-                children = [section.layout().itemAt(i).widget() for i in range(section.layout().count())]
-                section.setVisible(any(child and not child.isHidden() for child in children[1:]))
+        available_categories = set()
+        for category, row in self.rows:
+            matches = query in row.search_text
+            row.setVisible(matches)
+            if row.separator:
+                row.separator.setVisible(matches)
+            if matches:
+                available_categories.add(category)
+        for name, _, _ in self.CATEGORIES:
+            has_matches = name in available_categories
+            self.category_items[name].setHidden(not has_matches)
+            self.page_layouts[name][1].setVisible(bool(query) and not has_matches)
+        current = self.navigation.currentItem()
+        if current and current.isHidden():
+            for name, _, _ in self.CATEGORIES:
+                if not self.category_items[name].isHidden():
+                    self.navigation.setCurrentItem(self.category_items[name])
+                    break
 
 
 def main():
