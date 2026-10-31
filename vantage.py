@@ -283,7 +283,6 @@ class VantageWindow(QMainWindow):
         root = QHBoxLayout(central)
         root.setContentsMargins(0, 0, 0, 0)
         root.setSpacing(0)
-        root.addStretch(1)
 
         page = QWidget()
         page.setMaximumWidth(2250)
@@ -291,8 +290,7 @@ class VantageWindow(QMainWindow):
         content = QVBoxLayout(page)
         content.setContentsMargins(28, 22, 28, 20)
         content.setSpacing(16)
-        root.addWidget(page, 0)
-        root.addStretch(1)
+        root.addWidget(page, 1)
         self.setCentralWidget(central)
 
         header = QVBoxLayout()
@@ -311,7 +309,6 @@ class VantageWindow(QMainWindow):
         self.scroll.setWidgetResizable(True)
         self.scroll.setFrameShape(QFrame.Shape.NoFrame)
         body = QWidget()
-        body.setMinimumWidth(2800)
         self.body_layout = QVBoxLayout(body)
         self.body_layout.setContentsMargins(0, 0, 0, 0)
         self.body_layout.setSpacing(14)
