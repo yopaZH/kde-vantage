@@ -274,7 +274,7 @@ class VantageWindow(QMainWindow):
         super().__init__()
         self.setWindowTitle("Lenovo Vantage")
         self.setMinimumSize(900, 560)
-        self.resize(1180, 760)
+        self.resize(1800, 760)
         self.rows = []
         self.form_row = 0
         self.section_headings = set()
@@ -286,7 +286,7 @@ class VantageWindow(QMainWindow):
         root.addStretch(1)
 
         page = QWidget()
-        page.setMaximumWidth(1400)
+        page.setMaximumWidth(2250)
         content = QVBoxLayout(page)
         content.setContentsMargins(28, 22, 28, 20)
         content.setSpacing(16)
