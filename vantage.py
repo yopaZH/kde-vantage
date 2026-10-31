@@ -413,9 +413,9 @@ class VantageWindow(QMainWindow):
             options_layout.addWidget(button)
             buttons[key] = button
         row = SettingRow(title, description, options, stacked_control=True)
-        _, section_layout = self.sections["Performance"]
+        _, section_layout = self.sections["performance"]
         section_layout.addWidget(row)
-        self.rows.append(("Performance", row))
+        self.rows.append(("performance", row))
 
         def changed(key):
             def on_toggled(active):
