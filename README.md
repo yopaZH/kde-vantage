@@ -4,8 +4,6 @@ A native Qt control panel for Lenovo laptop features on Linux. The interface use
 
 The interface follows the system language and includes Russian and English translations.
 
-![Vantage running on KDE Plasma](images/screenshot.png)
-
 ## Features
 
 * Battery Conservation Mode and Always-On USB
