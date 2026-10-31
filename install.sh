@@ -1,15 +1,34 @@
 #!/bin/bash
-# Installs Vantage's dependencies. This fork targets Arch Linux/KDE Plasma.
+# Install runtime requirements for Debian/Ubuntu KDE Plasma.
 set -euo pipefail
 
-PACKAGES=(python-pyside6 plasma-integration polkit xorg-xinput networkmanager wev xorg-xev)
+PACKAGES=(
+    python3-pyside6.qtwidgets
+    plasma-integration
+    polkitd pkexec
+    xinput network-manager
+    wev x11-utils
+    libkf6config-bin libkf6service-bin
+    kmod
+)
 
-command -v pacman &>/dev/null || {
-    echo "pacman not found - this installer targets Arch Linux." >&2
+if ! command -v apt-get >/dev/null 2>&1; then
+    echo "apt-get not found. This installer targets Debian/Ubuntu KDE Plasma." >&2
     exit 1
-}
+fi
 
+if [ "$(id -u)" -eq 0 ]; then
+    APT=(apt-get)
+else
+    command -v sudo >/dev/null 2>&1 || {
+        echo "Run this installer as root or install sudo first." >&2
+        exit 1
+    }
+    APT=(sudo apt-get)
+fi
+
+echo "Updating apt package lists..."
+"${APT[@]}" update
 echo "Installing dependencies: ${PACKAGES[*]}"
-pacman -Qi "${PACKAGES[@]}" &>/dev/null || sudo pacman -S --needed "${PACKAGES[@]}"
-
+"${APT[@]}" install -y "${PACKAGES[@]}"
 echo "Dependencies installed."
