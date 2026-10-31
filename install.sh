@@ -7,8 +7,6 @@ PACKAGES=(
     plasma-integration
     polkitd pkexec
     xinput network-manager
-    wev x11-utils
-    libkf6config-bin libkf6service-bin
     kmod
 )
 

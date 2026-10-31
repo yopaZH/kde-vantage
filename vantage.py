@@ -7,21 +7,17 @@ import shutil
 import subprocess
 import sys
 
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt, QLocale
 from PySide6.QtGui import QAction, QFont, QIcon
 from PySide6.QtWidgets import (
     QApplication,
+    QButtonGroup,
     QCheckBox,
-    QComboBox,
     QFrame,
     QHBoxLayout,
     QLabel,
-    QLineEdit,
-    QListWidget,
-    QListWidgetItem,
     QMainWindow,
-    QMessageBox,
-    QStackedWidget,
+    QRadioButton,
     QScrollArea,
     QSizePolicy,
     QVBoxLayout,
@@ -32,12 +28,87 @@ APP_ID = "io.github.niizam.vantage"
 HELPER = "/usr/lib/vantage/vantage-helper"
 
 FAN_MODES = [
-    ("Super Silent", "silent"),
-    ("Standard", "standard"),
-    ("Dust Cleaning", "dust"),
-    ("Efficient Thermal Dissipation", "efficient"),
+    ("fan_silent", "silent"),
+    ("fan_standard", "standard"),
+    ("fan_dust", "dust"),
+    ("fan_efficient", "efficient"),
 ]
 FAN_MODE_VALUES = {"0": "silent", "133": "silent", "1": "standard", "2": "dust", "4": "efficient"}
+
+TRANSLATIONS = {
+    "en": {
+        "subtitle": "Manage your laptop's hardware settings",
+        "power": "Power",
+        "performance": "Performance",
+        "devices": "Devices",
+        "conservation_mode": "Conservation mode",
+        "conservation_description": "Limit the maximum charge to help extend battery lifespan",
+        "usb_charging": "Always-on USB",
+        "usb_charging_description": "Keep USB ports powered while the laptop is off",
+        "fan_mode": "Fan mode",
+        "fan_description": "Choose a cooling profile for the laptop",
+        "fan_silent": "Super Silent",
+        "fan_standard": "Standard",
+        "fan_dust": "Dust Cleaning",
+        "fan_efficient": "Efficient Thermal Dissipation",
+        "fn_lock": "Fn Lock",
+        "fn_lock_description": "Use F1–F12 as standard function keys",
+        "touchpad": "Touchpad",
+        "touchpad_description": "Enable or disable the built-in touchpad",
+        "camera": "Camera",
+        "camera_description": "Enable or disable the built-in camera",
+        "microphone": "Microphone",
+        "microphone_description": "Mute or unmute the default input device",
+        "wifi": "Wi-Fi",
+        "wifi_description": "Enable or disable the wireless connection",
+        "no_controls": "No supported hardware controls found",
+        "no_controls_description": "This device doesn't expose any Lenovo Vantage settings.",
+        "setting_error": "The setting could not be changed.",
+    },
+    "ru": {
+        "subtitle": "Настройка оборудования ноутбука",
+        "power": "Питание",
+        "performance": "Производительность",
+        "devices": "Устройства",
+        "conservation_mode": "Режим сохранения заряда",
+        "conservation_description": "Ограничивает максимальный уровень заряда батареи и помогает продлить срок её службы.",
+        "usb_charging": "USB-зарядка при выключенном ноутбуке",
+        "usb_charging_description": "Подаёт питание на USB-порты, даже когда ноутбук выключен.",
+        "fan_mode": "Режим вентилятора",
+        "fan_description": "Выберите профиль охлаждения ноутбука.",
+        "fan_silent": "Тихий",
+        "fan_standard": "Стандартный",
+        "fan_dust": "Очистка от пыли",
+        "fan_efficient": "Эффективное охлаждение",
+        "fn_lock": "Fn Lock",
+        "fn_lock_description": "Переключает клавиши F1–F12 в режим стандартных функциональных клавиш.",
+        "touchpad": "Сенсорная панель",
+        "touchpad_description": "Включает или выключает встроенную сенсорную панель.",
+        "camera": "Камера",
+        "camera_description": "Включает или выключает встроенную камеру.",
+        "microphone": "Микрофон",
+        "microphone_description": "Отключает или включает микрофон по умолчанию.",
+        "wifi": "Wi-Fi",
+        "wifi_description": "Включает или выключает беспроводную сеть.",
+        "no_controls": "Поддерживаемые настройки оборудования не найдены",
+        "no_controls_description": "Это устройство не предоставляет настройки Lenovo Vantage.",
+        "setting_error": "Не удалось изменить настройку.",
+    },
+}
+
+
+def active_language():
+    language = os.environ.get("LANGUAGE", "").split(":")[0].lower()
+    if not language:
+        language = QLocale.system().name().lower()
+    return "ru" if language.startswith("ru") else "en"
+
+
+LANGUAGE = active_language()
+
+
+def tr(key):
+    return TRANSLATIONS[LANGUAGE].get(key, TRANSLATIONS["en"].get(key, key))
 
 
 def sh(*args):
@@ -192,156 +263,128 @@ def set_wifi_active(active):
 
 
 class SettingRow(QWidget):
-    """A flat settings-page row styled entirely by the active Qt theme."""
+    """A compact settings row using standard KDE/Qt controls."""
 
-    def __init__(self, title, description, control, parent=None):
+    def __init__(self, title, description, control, stacked_control=False, parent=None):
         super().__init__(parent)
-        self.search_text = f"{title} {description}".casefold()
         self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Minimum)
-        layout = QHBoxLayout(self)
-        layout.setContentsMargins(0, 12, 0, 12)
-        layout.setSpacing(24)
+        description_label = QLabel(description)
+        description_label.setWordWrap(True)
+        description_label.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Minimum)
+
+        if isinstance(control, QCheckBox):
+            control.setText(title)
+            layout = QVBoxLayout(self)
+            layout.setContentsMargins(0, 8, 0, 8)
+            layout.setSpacing(2)
+            layout.addWidget(control)
+            description_label.setContentsMargins(24, 0, 0, 0)
+            layout.addWidget(description_label)
+            return
 
         text_box = QVBoxLayout()
         text_box.setContentsMargins(0, 0, 0, 0)
         text_box.setSpacing(4)
         title_label = QLabel(title)
         title_label.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
-        description_label = QLabel(description)
-        description_label.setWordWrap(True)
-        description_label.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Minimum)
         text_box.addWidget(title_label)
         text_box.addWidget(description_label)
-        layout.addLayout(text_box, 1)
-        layout.addWidget(control, 0, Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+        if stacked_control:
+            layout = QVBoxLayout(self)
+            layout.setContentsMargins(0, 10, 0, 10)
+            layout.setSpacing(8)
+            layout.addLayout(text_box)
+            layout.addWidget(control)
+        else:
+            layout = QHBoxLayout(self)
+            layout.setContentsMargins(0, 12, 0, 12)
+            layout.setSpacing(24)
+            layout.addLayout(text_box, 1)
+            layout.addWidget(control, 0, Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
 
 
 class VantageWindow(QMainWindow):
-    CATEGORIES = [
-        ("Power", "Battery and charging settings", "preferences-system-power-management"),
-        ("Performance", "Thermal and keyboard settings", "preferences-system-performance"),
-        ("Devices", "Connected hardware and radios", "preferences-desktop-peripherals"),
-    ]
+    CATEGORIES = ("power", "performance", "devices")
 
     def __init__(self):
         super().__init__()
         self.setWindowTitle("Lenovo Vantage")
-        self.setMinimumSize(760, 560)
-        self.resize(980, 680)
+        self.setMinimumSize(640, 520)
+        self.resize(1040, 700)
         self.rows = []
-        self.pages = {}
-        self.page_layouts = {}
-        self.category_items = {}
 
         central = QWidget()
         root = QHBoxLayout(central)
         root.setContentsMargins(0, 0, 0, 0)
         root.setSpacing(0)
+        root.addStretch(1)
 
-        sidebar = QWidget()
-        sidebar.setObjectName("navigationSidebar")
-        sidebar.setMinimumWidth(210)
-        sidebar.setMaximumWidth(260)
-        sidebar_layout = QVBoxLayout(sidebar)
-        sidebar_layout.setContentsMargins(12, 16, 12, 16)
-        sidebar_layout.setSpacing(12)
-        app_name = QLabel("Lenovo Vantage")
-        app_name.setContentsMargins(8, 4, 8, 8)
-        sidebar_layout.addWidget(app_name)
-        self.search = QLineEdit()
-        self.search.setPlaceholderText("Search settings…")
-        self.search.setClearButtonEnabled(True)
-        self.search.textChanged.connect(self.filter_rows)
-        sidebar_layout.addWidget(self.search)
-        self.navigation = QListWidget()
-        self.navigation.setFrameShape(QFrame.Shape.NoFrame)
-        self.navigation.currentItemChanged.connect(self.open_category)
-        sidebar_layout.addWidget(self.navigation, 1)
-        root.addWidget(sidebar)
-
-        divider = QFrame()
-        divider.setFrameShape(QFrame.Shape.VLine)
-        divider.setFrameShadow(QFrame.Shadow.Sunken)
-        root.addWidget(divider)
-
-        self.stack = QStackedWidget()
-        root.addWidget(self.stack, 1)
+        page = QWidget()
+        page.setMaximumWidth(900)
+        content = QVBoxLayout(page)
+        content.setContentsMargins(28, 22, 28, 20)
+        content.setSpacing(16)
+        root.addWidget(page, 0)
+        root.addStretch(1)
         self.setCentralWidget(central)
 
-        self.create_pages()
+        header = QVBoxLayout()
+        header.setSpacing(3)
+        title = QLabel("Lenovo Vantage")
+        title_font = title.font()
+        title_font.setPointSizeF(title_font.pointSizeF() * 1.4)
+        title_font.setWeight(QFont.Weight.DemiBold)
+        title.setFont(title_font)
+        subtitle = QLabel(tr("subtitle"))
+        header.addWidget(title)
+        header.addWidget(subtitle)
+        content.addLayout(header)
+
+        self.scroll = QScrollArea()
+        self.scroll.setWidgetResizable(True)
+        self.scroll.setFrameShape(QFrame.Shape.NoFrame)
+        body = QWidget()
+        self.body_layout = QVBoxLayout(body)
+        self.body_layout.setContentsMargins(0, 0, 0, 0)
+        self.body_layout.setSpacing(14)
+        self.scroll.setWidget(body)
+        content.addWidget(self.scroll, 1)
+
+        self.sections = {}
+        for category in self.CATEGORIES:
+            section = QWidget()
+            section_layout = QVBoxLayout(section)
+            section_layout.setContentsMargins(0, 0, 0, 0)
+            section_layout.setSpacing(4)
+            section_heading = QLabel(tr(category))
+            section_font = section_heading.font()
+            section_font.setWeight(QFont.Weight.DemiBold)
+            section_heading.setFont(section_font)
+            section_layout.addWidget(section_heading)
+            self.body_layout.addWidget(section)
+            self.sections[category] = (section, section_layout)
+
         self.populate()
-        self.search.setFocus()
+        self.body_layout.addStretch(1)
 
         escape = QAction(self)
         escape.setShortcut(Qt.Key.Key_Escape)
         escape.triggered.connect(self.close)
         self.addAction(escape)
 
-    def create_pages(self):
-        for name, description, icon_name in self.CATEGORIES:
-            page = QWidget()
-            page_layout = QVBoxLayout(page)
-            page_layout.setContentsMargins(32, 26, 32, 24)
-            page_layout.setSpacing(18)
-
-            heading = QVBoxLayout()
-            heading.setSpacing(4)
-            title = QLabel(name)
-            title_font = title.font()
-            title_font.setPointSizeF(title_font.pointSizeF() * 1.4)
-            title_font.setWeight(QFont.Weight.DemiBold)
-            title.setFont(title_font)
-            subtitle = QLabel(description)
-            heading.addWidget(title)
-            heading.addWidget(subtitle)
-            page_layout.addLayout(heading)
-
-            scroll = QScrollArea()
-            scroll.setWidgetResizable(True)
-            scroll.setFrameShape(QFrame.Shape.NoFrame)
-            body = QWidget()
-            body_layout = QVBoxLayout(body)
-            body_layout.setContentsMargins(0, 0, 0, 0)
-            body_layout.setSpacing(0)
-            scroll.setWidget(body)
-            page_layout.addWidget(scroll, 1)
-
-            no_results = QLabel("No matching settings")
-            no_results.setAlignment(Qt.AlignmentFlag.AlignCenter)
-            no_results.hide()
-            page_layout.addWidget(no_results)
-
-            self.pages[name] = page
-            self.page_layouts[name] = (body_layout, no_results)
-            self.stack.addWidget(page)
-            item = QListWidgetItem(name)
-            item.setIcon(QIcon.fromTheme(icon_name))
-            item.setData(Qt.ItemDataRole.UserRole, name)
-            self.navigation.addItem(item)
-            self.category_items[name] = item
-
-    def add_row(self, category, title, description, searchable, control):
+    def add_row(self, category, title, description, control):
         row = SettingRow(title, description, control)
-        row.search_text = f"{searchable} {title} {description}".casefold()
-        layout, _ = self.page_layouts[category]
-        if layout.count():
-            separator = QFrame()
-            separator.setFrameShape(QFrame.Shape.HLine)
-            separator.setFrameShadow(QFrame.Shadow.Sunken)
-            layout.addWidget(separator)
-            row.separator = separator
-        else:
-            row.separator = None
+        _, layout = self.sections[category]
         layout.addWidget(row)
         self.rows.append((category, row))
         return row
 
-    def add_switch(self, category, title, description, get_fn, set_fn):
-        switch = QCheckBox()
+    def add_checkbox(self, category, title_key, description_key, get_fn, set_fn):
+        title = tr(title_key)
+        switch = QCheckBox(title)
         switch.setChecked(bool(get_fn()))
         switch.setAccessibleName(title)
-        switch.setCursor(Qt.CursorShape.PointingHandCursor)
-        row = self.add_row(category, title, description, "", switch)
+        row = self.add_row(category, title, tr(description_key), switch)
 
         def changed(active):
             ok, err = set_fn(active)
@@ -349,92 +392,100 @@ class VantageWindow(QMainWindow):
                 switch.blockSignals(True)
                 switch.setChecked(not active)
                 switch.blockSignals(False)
-                QMessageBox.warning(self, title, err or "The setting could not be changed.")
+                self.show_error(title, err)
 
         switch.toggled.connect(changed)
         return row
 
     def add_fan_mode(self):
-        title, description = "Fan mode", "Choose the thermal and fan profile for this laptop"
-        combo = QComboBox()
-        for label, key in FAN_MODES:
-            combo.addItem(label, key)
-        combo.setCurrentIndex(max(0, combo.findData(get_fan_mode())))
-        combo.setMinimumContentsLength(18)
-        self.add_row("Performance", title, description, " ".join(x[0] for x in FAN_MODES), combo)
+        title, description = tr("fan_mode"), tr("fan_description")
+        options = QWidget()
+        options_layout = QVBoxLayout(options)
+        options_layout.setContentsMargins(0, 0, 0, 0)
+        options_layout.setSpacing(2)
+        group = QButtonGroup(options)
+        buttons = {}
+        current = get_fan_mode()
+        for label_key, key in FAN_MODES:
+            button = QRadioButton(tr(label_key))
+            button.setChecked(key == current)
+            group.addButton(button)
+            options_layout.addWidget(button)
+            buttons[key] = button
+        row = SettingRow(title, description, options, stacked_control=True)
+        _, section_layout = self.sections["Performance"]
+        section_layout.addWidget(row)
+        self.rows.append(("Performance", row))
 
-        def changed(index):
-            ok, err = set_fan_mode(combo.itemData(index))
-            if not ok:
-                QMessageBox.warning(self, "Fan mode", err or "The fan mode could not be changed.")
-                combo.blockSignals(True)
-                combo.setCurrentIndex(max(0, combo.findData(get_fan_mode())))
-                combo.blockSignals(False)
+        def changed(key):
+            def on_toggled(active):
+                if not active:
+                    return
+                ok, err = set_fan_mode(key)
+                if not ok:
+                    selected_key = get_fan_mode()
+                    for radio in buttons.values():
+                        radio.blockSignals(True)
+                    buttons[selected_key].setChecked(True)
+                    for radio in buttons.values():
+                        radio.blockSignals(False)
+                    self.show_error("Fan mode", err)
+            return on_toggled
 
-        combo.currentIndexChanged.connect(changed)
+        for _, key in FAN_MODES:
+            buttons[key].toggled.connect(changed(key))
+
+    def show_error(self, title, message):
+        self.statusBar().showMessage(f"{title}: {message or tr('setting_error')}", 8000)
 
     def populate(self):
         if vpc_path("conservation_mode"):
-            self.add_switch("Power", "Conservation mode", "Limit battery charge to help preserve battery lifespan", get_conservation_mode, set_conservation_mode)
+            self.add_checkbox("power", "conservation_mode", "conservation_description", get_conservation_mode, set_conservation_mode)
         if vpc_path("usb_charging"):
-            self.add_switch("Power", "Always-on USB", "Charge connected devices while the laptop is off", get_usb_charging, set_usb_charging)
+            self.add_checkbox("power", "usb_charging", "usb_charging_description", get_usb_charging, set_usb_charging)
 
         if vpc_path("fan_mode"):
             self.add_fan_mode()
         if vpc_path("fn_lock"):
-            self.add_switch("Performance", "Fn Lock", "Use F1–F12 as standard function keys", get_fn_lock, set_fn_lock)
+            self.add_checkbox("performance", "fn_lock", "fn_lock_description", get_fn_lock, set_fn_lock)
 
         touchpad = get_touchpad()
         if touchpad:
-            self.add_switch("Devices", "Touchpad", "Enable or disable the built-in touchpad", lambda: get_touchpad_active(touchpad), lambda active: set_touchpad_active(touchpad, active))
+            self.add_checkbox("devices", "touchpad", "touchpad_description", lambda: get_touchpad_active(touchpad), lambda active: set_touchpad_active(touchpad, active))
         if sh("modinfo", "-n", "uvcvideo")[0] == 0:
-            self.add_switch("Devices", "Camera", "Enable or disable the webcam driver", get_camera, set_camera)
+            self.add_checkbox("devices", "camera", "camera_description", get_camera, set_camera)
         if which("pactl"):
-            self.add_switch("Devices", "Microphone", "Mute or unmute the default microphone", get_mic_active, set_mic_active)
+            self.add_checkbox("devices", "microphone", "microphone_description", get_mic_active, set_mic_active)
         if which("nmcli"):
-            self.add_switch("Devices", "Wi-Fi", "Turn the wireless radio on or off", get_wifi_active, set_wifi_active)
+            self.add_checkbox("devices", "wifi", "wifi_description", get_wifi_active, set_wifi_active)
 
-        for name, _, _ in self.CATEGORIES:
-            if not self.page_layouts[name][0].count():
-                self.category_items[name].setHidden(True)
+        for category in self.CATEGORIES:
+            section, layout = self.sections[category]
+            if layout.count() == 1:
+                section.setVisible(False)
 
-        if self.rows:
-            first = next(name for name, _, _ in self.CATEGORIES if not self.category_items[name].isHidden())
-            self.navigation.setCurrentItem(self.category_items[first])
-        else:
-            empty = QLabel("This device doesn't expose any supported Lenovo hardware controls.")
-            empty.setWordWrap(True)
-            empty.setAlignment(Qt.AlignmentFlag.AlignCenter)
-            self.stack.addWidget(empty)
-            self.stack.setCurrentWidget(empty)
-
-    def open_category(self, current, _previous):
-        if not current:
-            return
-        category = current.data(Qt.ItemDataRole.UserRole)
-        self.stack.setCurrentWidget(self.pages[category])
-        self.filter_rows(self.search.text())
-
-    def filter_rows(self, text):
-        query = text.strip().casefold()
-        available_categories = set()
-        for category, row in self.rows:
-            matches = query in row.search_text
-            row.setVisible(matches)
-            if row.separator:
-                row.separator.setVisible(matches)
-            if matches:
-                available_categories.add(category)
-        for name, _, _ in self.CATEGORIES:
-            has_matches = name in available_categories
-            self.category_items[name].setHidden(not has_matches)
-            self.page_layouts[name][1].setVisible(bool(query) and not has_matches)
-        current = self.navigation.currentItem()
-        if current and current.isHidden():
-            for name, _, _ in self.CATEGORIES:
-                if not self.category_items[name].isHidden():
-                    self.navigation.setCurrentItem(self.category_items[name])
-                    break
+        if not self.rows:
+            empty = QWidget()
+            empty_layout = QVBoxLayout(empty)
+            empty_layout.addStretch(1)
+            icon = QLabel()
+            icon.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            pixmap = QIcon.fromTheme("dialog-information").pixmap(48, 48)
+            if not pixmap.isNull():
+                icon.setPixmap(pixmap)
+                empty_layout.addWidget(icon)
+            empty_title = QLabel(tr("no_controls"))
+            empty_title.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            title_font = empty_title.font()
+            title_font.setWeight(QFont.Weight.DemiBold)
+            empty_title.setFont(title_font)
+            empty_layout.addWidget(empty_title)
+            empty_description = QLabel(tr("no_controls_description"))
+            empty_description.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            empty_description.setWordWrap(True)
+            empty_layout.addWidget(empty_description)
+            empty_layout.addStretch(1)
+            self.body_layout.addWidget(empty, 1)
 
 
 def main():

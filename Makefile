@@ -4,7 +4,6 @@ install:
 	chmod +x ./install.sh
 	./install.sh
 	install -D -o root -g root -m 755 ./vantage.py /usr/bin/vantage
-	install -D -o root -g root -m 755 ./vantage-bind-key /usr/bin/vantage-bind-key
 	install -D -o root -g root -m 755 ./vantage-helper /usr/lib/vantage/vantage-helper
 	install -D -o root -g root -m 644 ./org.vantage.helper.policy /usr/share/polkit-1/actions/org.vantage.helper.policy
 	install -D -o root -g root -m 644 ./icon.png /usr/share/icons/hicolor/scalable/apps/vantage.png
