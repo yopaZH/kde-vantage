@@ -1,0 +1,66 @@
+#!/bin/bash
+# Privileged helper for Lenovo Vantage. Only ever invoked via pkexec,
+# authorized by the org.vantage.helper polkit action - never run directly.
+set -euo pipefail
+
+VPC="$(compgen -G '/sys/bus/platform/devices/VPC2004:*' | head -n1 || true)"
+
+fail() {
+    echo "vantage-helper: $1" >&2
+    exit 1
+}
+
+[ "$(id -u)" -eq 0 ] || fail "must be run as root"
+
+write_vpc() {
+    local file="$1" value="$2"
+    [ -n "$VPC" ] && [ -w "$VPC/$file" ] || fail "$file is not supported on this device"
+    echo "$value" > "$VPC/$file"
+}
+
+cmd="${1:-}"
+arg="${2:-}"
+
+case "$cmd" in
+    conservation_mode)
+        case "$arg" in
+            on)  write_vpc conservation_mode 1 ;;
+            off) write_vpc conservation_mode 0 ;;
+            *) fail "usage: conservation_mode on|off" ;;
+        esac
+        ;;
+    usb_charging)
+        case "$arg" in
+            on)  write_vpc usb_charging 1 ;;
+            off) write_vpc usb_charging 0 ;;
+            *) fail "usage: usb_charging on|off" ;;
+        esac
+        ;;
+    fan_mode)
+        case "$arg" in
+            silent)    write_vpc fan_mode 0 ;;
+            standard)  write_vpc fan_mode 1 ;;
+            dust)      write_vpc fan_mode 2 ;;
+            efficient) write_vpc fan_mode 4 ;;
+            *) fail "usage: fan_mode silent|standard|dust|efficient" ;;
+        esac
+        ;;
+    fn_lock)
+        # Device semantics are inverted: 0 = FN lock engaged (on), 1 = disengaged (off)
+        case "$arg" in
+            on)  write_vpc fn_lock 0 ;;
+            off) write_vpc fn_lock 1 ;;
+            *) fail "usage: fn_lock on|off" ;;
+        esac
+        ;;
+    camera)
+        case "$arg" in
+            on)  modprobe uvcvideo ;;
+            off) modprobe -r uvcvideo ;;
+            *) fail "usage: camera on|off" ;;
+        esac
+        ;;
+    *)
+        fail "unknown command: $cmd"
+        ;;
+esac
