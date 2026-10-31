@@ -273,11 +273,11 @@ class VantageWindow(QMainWindow):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("Lenovo Vantage")
-        self.setMinimumSize(980, 560)
-        self.resize(2400, 760)
+        self.setMinimumSize(900, 560)
+        self.resize(1180, 760)
         self.rows = []
         self.form_row = 0
-        self.section_headings = []
+        self.section_headings = set()
 
         central = QWidget()
         root = QHBoxLayout(central)
@@ -286,7 +286,7 @@ class VantageWindow(QMainWindow):
         root.addStretch(1)
 
         page = QWidget()
-        page.setMaximumWidth(2300)
+        page.setMaximumWidth(1400)
         content = QVBoxLayout(page)
         content.setContentsMargins(28, 22, 28, 20)
         content.setSpacing(16)
@@ -320,20 +320,10 @@ class VantageWindow(QMainWindow):
         self.form_layout.setContentsMargins(0, 0, 0, 0)
         self.form_layout.setHorizontalSpacing(36)
         self.form_layout.setVerticalSpacing(8)
-        self.form_layout.setColumnMinimumWidth(0, 360)
-        self.form_layout.setColumnStretch(0, 0)
-        self.form_layout.setColumnStretch(1, 1)
+        self.form_layout.setColumnMinimumWidth(0, 280)
+        self.form_layout.setColumnStretch(0, 1)
+        self.form_layout.setColumnStretch(1, 2)
         self.body_layout.addLayout(self.form_layout)
-
-        for category in self.CATEGORIES:
-            section_heading = QLabel(tr(category))
-            section_font = section_heading.font()
-            section_font.setWeight(QFont.Weight.DemiBold)
-            section_heading.setFont(section_font)
-            self.form_layout.addWidget(section_heading, self.form_row, 0, 1, 2)
-            self.form_layout.setRowMinimumHeight(self.form_row, 30)
-            self.section_headings.append((category, section_heading))
-            self.form_row += 1
 
         self.populate()
         self.body_layout.addStretch(1)
@@ -344,6 +334,17 @@ class VantageWindow(QMainWindow):
         self.addAction(escape)
 
     def add_row(self, category, title, description, control):
+        if category not in self.section_headings:
+            section_heading = QLabel(tr(category))
+            section_font = section_heading.font()
+            section_font.setWeight(QFont.Weight.DemiBold)
+            section_heading.setFont(section_font)
+            section_heading.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+            self.form_layout.addWidget(section_heading, self.form_row, 0)
+            self.form_layout.setRowMinimumHeight(self.form_row, 32)
+            self.section_headings.add(category)
+            self.form_row += 1
+
         label = QLabel(f"{title}:")
         label.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
         description_label = QLabel(description)
@@ -353,6 +354,7 @@ class VantageWindow(QMainWindow):
         field_layout = QVBoxLayout(field)
         field_layout.setContentsMargins(0, 4, 0, 4)
         field_layout.setSpacing(4)
+        field.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Minimum)
         field_layout.addWidget(control, 0, Qt.AlignmentFlag.AlignLeft)
         field_layout.addWidget(description_label)
         self.form_layout.addWidget(label, self.form_row, 0)
@@ -456,10 +458,6 @@ class VantageWindow(QMainWindow):
             self.add_checkbox("devices", "microphone", "microphone_description", get_mic_active, set_mic_active)
         if which("nmcli"):
             self.add_checkbox("devices", "wifi", "wifi_description", get_wifi_active, set_wifi_active)
-
-        if not self.rows:
-            for _, heading in self.section_headings:
-                heading.hide()
 
         if not self.rows:
             empty = QWidget()
