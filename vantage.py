@@ -320,7 +320,7 @@ class VantageWindow(QMainWindow):
         self.form_layout.setContentsMargins(0, 0, 0, 0)
         self.form_layout.setHorizontalSpacing(36)
         self.form_layout.setVerticalSpacing(8)
-        self.form_layout.setColumnMinimumWidth(0, 280)
+        self.form_layout.setColumnMinimumWidth(0, 0)
         self.form_layout.setColumnStretch(0, 1)
         self.form_layout.setColumnStretch(1, 2)
         self.body_layout.addLayout(self.form_layout)
@@ -335,18 +335,29 @@ class VantageWindow(QMainWindow):
 
     def add_row(self, category, title, description, control):
         if category not in self.section_headings:
+            if self.section_headings:
+                separator = QFrame()
+                separator.setFrameShape(QFrame.Shape.HLine)
+                separator.setFrameShadow(QFrame.Shadow.Sunken)
+                self.form_layout.addWidget(separator, self.form_row, 0, 1, 2)
+                self.form_row += 1
+
             section_heading = QLabel(tr(category))
             section_font = section_heading.font()
             section_font.setWeight(QFont.Weight.DemiBold)
             section_heading.setFont(section_font)
-            section_heading.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+            section_heading.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignTop)
+            section_heading.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Minimum)
             self.form_layout.addWidget(section_heading, self.form_row, 0)
             self.form_layout.setRowMinimumHeight(self.form_row, 32)
             self.section_headings.add(category)
             self.form_row += 1
 
         label = QLabel(f"{title}:")
-        label.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+        label.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignTop)
+        label.setContentsMargins(0, 4, 0, 0)
+        label.setWordWrap(True)
+        label.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Minimum)
         description_label = QLabel(description)
         description_label.setWordWrap(True)
         description_label.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Minimum)
