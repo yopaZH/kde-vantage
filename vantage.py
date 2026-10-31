@@ -311,6 +311,7 @@ class VantageWindow(QMainWindow):
         self.scroll.setWidgetResizable(True)
         self.scroll.setFrameShape(QFrame.Shape.NoFrame)
         body = QWidget()
+        body.setMinimumWidth(2800)
         self.body_layout = QVBoxLayout(body)
         self.body_layout.setContentsMargins(0, 0, 0, 0)
         self.body_layout.setSpacing(14)
